@@ -59,6 +59,7 @@ class RobotArmModel:
         val_alpha = max(-1.0, min(1.0, val_alpha))
         alpha = math.acos(val_alpha)
         
+        # Csak a "könyök felfelé" megoldást vesszük (phi32 = beta + alpha)
         phi32 = beta + alpha
 
         eps = 0.001
@@ -158,8 +159,7 @@ class RobotApp:
         tk.Entry(sub, textvariable=self.div_var, width=5).grid(row=1, column=1)
 
     def update_model_from_ui(self, e=None):
-        # Ez a függvény most már csak inicializáláskor fut le, 
-        # mivel a mezők readonly-k és a gomb nincs ott.
+        
         try:
             v = [float(x.get()) for x in self.entries]
             self.model.l3, self.model.l4 = v[0], v[1]
@@ -189,20 +189,40 @@ class RobotApp:
         self.canvas.delete("all")
         bx, by = self.to_scr(0, 0)
 
-        # --- 1. KOORDINÁTA RENDSZER (0-5) ---
-        self.canvas.create_line(bx, by, bx + 6 * self.scale, by, fill="black", arrow="last")
-        self.canvas.create_line(bx, by, bx, by - 6 * self.scale, fill="black", arrow="last")
+        # --- 1. KOORDINÁTA RENDSZER (GRID és TENGELYEK) ---
+        grid_color = "#E0E0E0"
+        max_coord = 6
+        axis_length = max_coord * self.scale
         
-        for i in range(1, 6):
+        # 1.1 Rács (Grid) kirajzolása
+        for i in range(1, max_coord):
+            # Függőleges vonalak
+            sx = bx + i * self.scale
+            # A rács a teljes vászonra kiterjed
+            self.canvas.create_line(sx, 0, sx, self.canvas.winfo_height(), fill=grid_color) 
+            # Vízszintes vonalak
+            sy = by - i * self.scale
+            self.canvas.create_line(0, sy, self.canvas.winfo_width(), sy, fill=grid_color) 
+
+        # 1.2 Tengelyek rajzolása
+        self.canvas.create_line(bx, by, bx + axis_length, by, fill="black", arrow="last", width=1.5)
+        self.canvas.create_line(bx, by, bx, by - axis_length, fill="black", arrow="last", width=1.5)
+        
+        # Skála Jelölések és feliratok
+        for i in range(1, max_coord):
             sx = bx + i * self.scale
             self.canvas.create_line(sx, by - 5, sx, by + 5, fill="black") 
-            self.canvas.create_text(sx, by + 15, text=str(i))
+            self.canvas.create_text(sx, by + 15, text=str(i), font=("Arial", 9))
 
             sy = by - i * self.scale
             self.canvas.create_line(bx - 5, sy, bx + 5, sy, fill="black") 
-            self.canvas.create_text(bx - 15, sy, text=str(i))
+            self.canvas.create_text(bx - 15, sy, text=str(i), font=("Arial", 9))
             
-        self.canvas.create_text(bx - 10, by + 10,)
+        # Tengelyek elnevezése
+        self.canvas.create_text(bx + axis_length + 20, by, text="X (m)", font=("Arial", 10, "bold"))
+        self.canvas.create_text(bx, by - axis_length - 20, text="Y (m)", font=("Arial", 10, "bold"))
+        self.canvas.create_text(bx - 10, by + 10, text="O", font=("Arial", 10)) 
+
 
         # --- 2. MUNKATERÜLET ---
         pts = []
@@ -231,27 +251,23 @@ class RobotApp:
         self.canvas.create_polygon(pts, fill="#9BCEEC", outline="black", dash=(5, 2))
 
         # --- Végpontok (A, B, C, D) ---
-        # A pont (0.61, 0.61)
         _, _, pA_end = self.model.forward_kinematics(self.model.rad_max32, self.model.rad_max43)
         sa = self.to_scr(*pA_end)
         self.canvas.create_text(sa[0]-15, sa[1], text="A", font=("bold"))
         
-        # B pont (0.78, 1.58)
         _, _, pB_end = self.model.forward_kinematics(self.model.rad_max32, self.model.rad_min43)
         sb = self.to_scr(*pB_end)
         self.canvas.create_text(sb[0], sb[1]-15, text="B", font=("bold"))
         
-        # C pont (1.75, 0.27)
         _, _, pC_end = self.model.forward_kinematics(self.model.rad_min32, self.model.rad_min43)
         sc = self.to_scr(*pC_end)
         self.canvas.create_text(sc[0]+15, sc[1], text="C", font=("bold"))
         
-        # D pont (0.85, -0.15)
         _, _, pD_end = self.model.forward_kinematics(self.model.rad_min32, self.model.rad_max43)
         sd = self.to_scr(*pD_end)
         self.canvas.create_text(sd[0], sd[1]+15, text="D", font=("bold"))
 
-        # --- 3. KAR RAJZOLÁSA ---
+        # --- 3. KAR RAJZOLÁSA (Vastagítás és színek) ---
         p32, p43 = self.model.rad_min32, self.model.rad_min43
         if self.model.points: p32, p43 = self.model.points[-1][2], self.model.points[-1][3]
         if hasattr(self, 'anim_st'): p32, p43 = self.anim_st
@@ -261,13 +277,26 @@ class RobotApp:
         sB = self.to_scr(*pB)
         sC = self.to_scr(*pC)
 
-        self.canvas.create_line(sA[0], sA[1], sB[0], sB[1], width=4, fill="gray")
-        self.canvas.create_text((sA[0]+sB[0])/2, (sA[1]+sB[1])/2 - 15, text="L3", font=("bold"))
-        self.canvas.create_line(sB[0], sB[1], sC[0], sC[1], width=3, fill="black")
-        self.canvas.create_text((sB[0]+sC[0])/2 + 15, (sB[1]+sC[1])/2 - 15, text="L4", font=("bold"))
+        kar_vastagsag = 8
+        
+       
+        self.canvas.create_line(sA[0], sA[1], sB[0], sB[1], 
+                                width=kar_vastagsag, fill="#8B4513", 
+                                capstyle=tk.ROUND)
+        self.canvas.create_text((sA[0]+sB[0])/2, (sA[1]+sB[1])/2 - 15, 
+                                text="L3", font=("Arial", 10, "bold"), fill="black")
+                                
+       
+        self.canvas.create_line(sB[0], sB[1], sC[0], sC[1], 
+                                width=kar_vastagsag - 2, fill="#4682B4", 
+                                capstyle=tk.ROUND)
+        self.canvas.create_text((sB[0]+sC[0])/2 + 15, (sB[1]+sC[1])/2 - 15, 
+                                text="L4", font=("Arial", 10, "bold"), fill="black")
 
-        self.canvas.create_oval(sB[0]-3, sB[1]-3, sB[0]+3, sB[1]+3, fill="white", outline="black")
-        self.canvas.create_oval(sC[0]-4, sC[1]-4, sC[0]+4, sC[1]+4, fill="red", outline="black")
+        
+        self.canvas.create_oval(sA[0]-6, sA[1]-6, sA[0]+6, sA[1]+6, fill="#A9A9A9", outline="black") # A pont (origó)
+        self.canvas.create_oval(sB[0]-6, sB[1]-6, sB[0]+6, sB[1]+6, fill="silver", outline="black") # B pont (könyök)
+        self.canvas.create_oval(sC[0]-8, sC[1]-8, sC[0]+8, sC[1]+8, fill="red", outline="black", tags="robot_end_effector") # C pont (végpont)
 
         d32 = math.degrees(p32)
         self.draw_cs(sB[0], sB[1], d32)
@@ -280,12 +309,19 @@ class RobotApp:
         self.canvas.create_arc(sB[0]-25, sB[1]-25, sB[0]+25, sB[1]+25, start=start_angle_b, extent=-d43, style="arc", outline="green")
         self.canvas.create_text(sB[0]+20, sB[1]+20, text=f"{d43:.1f}°", fill="green")
 
+        # --- 4. ÚTVONAL NYOMKÖVETÉS---
         for i, p in enumerate(self.model.points):
             sc = self.to_scr(p[0], p[1])
-            self.canvas.create_oval(sc[0]-3, sc[1]-3, sc[0]+3, sc[1]+3, fill="black")
+            
+            # Pontok (végpontok)
+            self.canvas.create_oval(sc[0]-4, sc[1]-4, sc[0]+4, sc[1]+4, fill="darkgreen", outline="black")
+            
+            # Sorszám megjelenítése
+            self.canvas.create_text(sc[0] + 10, sc[1] - 10, text=str(i+1), font=("Arial", 8, "bold"), fill="darkgreen")
+            
             if i > 0:
                 prev = self.to_scr(self.model.points[i-1][0], self.model.points[i-1][1])
-                self.canvas.create_line(prev[0], prev[1], sc[0], sc[1], dash=(2,2), fill="gray")
+                self.canvas.create_line(prev[0], prev[1], sc[0], sc[1], width=2, fill="gray")
 
     def draw_cs(self, ox, oy, ang):
         rad = math.radians(ang)
@@ -357,6 +393,8 @@ class RobotApp:
             self.is_moving=False
             if hasattr(self,'anim_st'): del self.anim_st
             self.draw()
+            # Törli a mozgás közbeni adatkijelzést, amikor a robot megáll
+            self.canvas.delete("current_data") 
             return
         
         data = self.anim_q.pop(0)
@@ -374,6 +412,16 @@ class RobotApp:
         ))
         self.tree.yview_moveto(1)
         self.draw()
+        
+        # --- Pillanatnyi adatok megjelenítése a végpontnál ---
+        sC = self.to_scr(*pos)
+        current_data = f"X: {pos[0]:.2f} m\nY: {pos[1]:.2f} m\nT: {data[3]:.2f} s"
+        
+        self.canvas.create_text(sC[0] + 50, sC[1] - 20, 
+                                text=current_data, 
+                                fill="red", font=("Arial", 10, "bold"), 
+                                anchor="w", tags="current_data") 
+        
         self.root.after(50, self.run_anim)
     
     def stop(self): self.is_moving=False
