@@ -73,7 +73,7 @@ class RobotArmModel:
 class RobotApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Robotkar Szimuláció - Rakodás")
+        self.root.title("Robotkar Szimuláció ")
         self.root.geometry("1280x768") 
 
         self.model = RobotArmModel()
@@ -216,7 +216,7 @@ class RobotApp:
         sA = self.to_scr(0,0)
 
         # --- 1. HÁTTÉR ELEMEK ---
-        # Gyűjtőterület (Drop Zone)
+        # Gyűjtőterület 
         if self.pick_place_var.get():
             bin_w_scr, bin_h_scr = 60, 40
             bin_cx, bin_cy = self.to_scr(self.bin_x, self.bin_y)
